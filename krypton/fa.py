@@ -37,13 +37,15 @@ ENG_BIGRAMS = [
 ]
 
 # The top 16 double letter frequencies in English.
-# https://blogs.sas.com/content/iml/2014/10/03/double-letter-bigrams.html
-ENG_DOUBLE = 'lseotfprmcndgiba'
+# http://letterfrequency.org/
+ENG_DOUBLE = 'setflmo'
 
 # Terminal colour codes
+BLACK = '\033[0;30m'
 RED = '\033[0;31m'
 GREEN = '\033[0;32m'
-YELLOW = '\033[1;33m'
+YELLOW = '\033[0;33m'
+BLACKBG = '\033[0;40m'
 NC = '\033[0m'
 
 
@@ -66,16 +68,6 @@ if __name__ == '__main__':
         help='Comma separated translation pairs.'
     )
     parser.add_argument(
-        '--fulltrans',
-        action='store_true',
-        help='Attempt a full translation using raw freq analysis.'
-    )
-    parser.add_argument(
-        '--highlowtrans',
-        action='store_true',
-        help='Attempt a full translation using raw freq analysis.'
-    )
-    parser.add_argument(
         '--ngrams',
         action='store_true',
         help='Show bigram frequencies.'
@@ -84,6 +76,11 @@ if __name__ == '__main__':
         '--doubles',
         action='store_true',
         help='Show double letter frequencies.'
+    )
+    parser.add_argument(
+        '--black',
+        action='store_true',
+        help='Render remaining ciphertext in black.'
     )
     args = parser.parse_args()
 
@@ -96,6 +93,8 @@ if __name__ == '__main__':
         bigrams = n_grams(ciphertext, 2)
         trigrams = n_grams(ciphertext, 3)
 
+        # NOTE: Working with two buffers to allow us to place the results
+        #       side by side when printing to the screen.
         buff_1.append('{}[+] Bigram frequency rank{}'.format(YELLOW, NC))
         buff_1.append('{}========================={}'.format(YELLOW, NC))
         for result in zip(bigrams, ENG_BIGRAMS):
@@ -111,19 +110,20 @@ if __name__ == '__main__':
         print('')
 
     if args.doubles:
+        # Check the frequency of double letters
         doubles = Counter()
         prev = ciphertext[0]
         for c in ciphertext[1:]:
             if c == prev:
                 doubles[c.lower()] += 1
             prev = c
-        doubles = [d[0] for d in doubles.most_common(16)]
+        doubles = [d[0] for d in doubles.most_common(len(ENG_DOUBLE))]
         print('{}[+] Double Letter frequency rank{}'.format(YELLOW, NC))
         print('{}================================{}'.format(YELLOW, NC))
         print('  English:\t', ENG_DOUBLE)
         print('  Ciphertext:\t', ''.join(doubles), '\n')
 
-    # Run character frequency analysis
+    # Run single character frequency analysis
     freqs = Counter(chars)
     for char in freqs:
         freqs[char] = round(freqs[char] / len(chars), 4)
@@ -139,41 +139,39 @@ if __name__ == '__main__':
     print('  English:\t', ETAOIN)
     print('  Ciphertext:\t', ''.join(ranked))
 
-    if args.fulltrans:
-        print('')
-        print(('{}[!] Assume that the frequencies match'
-               ' perfectly to etaoin{}').format(YELLOW, NC))
-        print(('{}====================================='
-               '===================={}').format(YELLOW, NC))
-        t_map = dict(zip(ranked, ETAOIN))
-        print(''.join(t_map.get(c, c) for c in ciphertext.lower()))
+    # Set the foreground colour for remaining ciphertext
+    fg = BLACK if args.black else RED
 
-    elif args.highlowtrans:
-        # Only take the top/bottom 6 from etaoin
-        print('')
-        print(('{}[+] Translate only the top/bottom'
-               ' 6 letters from etaoin{}').format(YELLOW, NC))
-        print(('{}================================='
-               '======================{}').format(YELLOW, NC))
-        hl_ranked = ranked[:7] + ranked[-6:]
-        hl_etaoin = ETAOIN[:7] + ETAOIN[-6:]
-        t_map = {
-            p[0]: GREEN + p[1].upper() + NC
-            for p in zip(hl_ranked, hl_etaoin)
-        }
-        print(''.join(
-            t_map.get(c, RED + c + NC)
-            for c in ciphertext.lower())
-        )
-
-    elif args.trans:
+    if args.trans:
         # User specified translation
         pairs = args.trans.split(',')
         print('')
         print('{}[+] Running user specified translation'.format(YELLOW, NC))
         print('{}======================================'.format(YELLOW, NC))
-        t_map = {p[0]: GREEN + p[1].upper() + NC for p in pairs}
+
+        # Form the translation map
+        t_map = {}
+        for k, v in pairs:
+            # Make sure we haven't seen either the key or value yet
+            if k in t_map:
+                print('{}[!] Repeated translation key found: {}{}'.format(
+                    RED, k, NC))
+                sys.exit(42)
+            elif v in t_map.values():
+                print('{}[!] Repeated translation target found: {}{}'.format(
+                    RED, v, NC))
+                sys.exit(42)
+
+            # OK to add to the map, printing in green caps
+            t_map[k] = GREEN + v.upper() + NC
+
+        remaining = [c for c in ascii_lowercase if c not in t_map]
+        if remaining:
+            print('{}[ ] Remaining characters: {}{}\n'.format(
+                BLACKBG, ''.join(remaining), NC
+            ))
+
         print(''.join(
-            t_map.get(c, RED + c + NC)
+            t_map.get(c, fg + c + NC)
             for c in ciphertext.lower())
         )

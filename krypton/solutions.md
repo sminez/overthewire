@@ -223,4 +223,24 @@ GSGSQ NJDSB JDSNJ DSUZQ VSUKS NSSOZ SSWCG EVLDQ NWQGW EVBUU LKCJD QVVJD SQYYS
 QNQGZ SBXAM NGCUD SWEBV WJDSK SCEDJ BXJDS CGUSZ JKQUI SNLNS TQNFQ AVSQG WJQFC
 GEQVV JDCGE UCGJB ZBGUC WSNQJ CBGCZ BMVWD QNWVL AVQTS RMYCJ SNXBN DCUBY CGCBG
 NSUYS ZJCGE CJ
+
+$ cat krypton4
+KSVVW BGSJD SVSIS VXBMN YQUUK BNWCU ANMJS
 ```
+
+So, after a lot of trial and error (and finally remembering to check the
+password cipher text as well...!) I've got it! The `fa.py` script turned out
+rather nicely as a little util for tinkering with this sort of thing.
+
+```bash
+$ cat lvl3/krypton4 | ./fa.py -t jt,dh,se,hq,mu,vl,bo,kw,iv,wd,gn,xf,nr,yp,qa,us,ci,fk,ab,eg,zc,ly,tm,ox,rj,pk 
+[+] Single Letter frequency rank
+================================
+  English:	 etaoinshrdlcumwfgypbvkjxqz
+  Ciphertext:	 svbunjmwkdycxgqiarhozptfle
+
+[+] Running user specified translation
+======================================
+WELLD ONETH ELEVE LFOUR PASSW ORDIS BRUTE
+```
+WELL DONE THE LEVEL FOUR PASSWORD IS BRUTE
