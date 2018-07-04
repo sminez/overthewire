@@ -150,9 +150,10 @@ Segmentation fault
 So, whatever gets returned from the ENV lookup, gets executed as a C function
 (or it tries to at least). Back to google!
 
-Ah, so this needs to be some `shellcode`: a set of assembler instructions that
-open a remote shell. There are tonnes of examples online...but URGH that feels
-nasty to try one out! Good job it's on this remote server...!
+Ah, so this needs to be some [shellcode](http://www.vividmachines.com/shellcode/shellcode.html):
+a set of assembler instructions that open a remote shell. There are tonnes of
+examples online...but URGH that feels nasty to try one out! Good job it's on
+this remote server...!
 
 Oh! pwntools! Looks like they have a bunch of built in stuff for precisely this
 sort of thing:
